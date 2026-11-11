@@ -1,0 +1,113 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python syntax check
+        run: python3 -m py_compile app/app.py
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: nounoutil:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start container
+        run: |
+          mkdir -p data
+          docker run -d --name nounoutil -p 8080:8000 -v "$PWD/data:/data" nounoutil:test
+
+      - name: Wait for the app
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8080/api/state >/dev/null && exit 0
+            sleep 1
+          done
+          echo "L'application ne répond pas" && exit 1
+
+      - name: Smoke tests (interface, PWA, API, exports)
+        run: |
+          B=http://localhost:8080; J='Content-Type: application/json'
+          curl -fsS $B/ | grep -q "Nounoutil"
+          curl -fsS $B/manifest.json | grep -q "Nounoutil"
+          curl -fsS $B/sw.js >/dev/null
+          curl -fsS -X POST $B/api/nanny -H "$J" -d '{"name":"Sandrine"}'
+          NID=$(curl -fsS $B/api/state | jq -r '.nannies[0].id')
+          CID=$(curl -fsS -X POST $B/api/child -H "$J" -d "{\"name\":\"Léa\",\"sex\":\"F\",\"nanny_id\":$NID,\"hw\":40,\"dw\":4,\"weeks\":46,\"rate\":4,\"indem\":3,\"meal\":2,\"mode\":\"mensualise\",\"dsick\":0,\"dnm\":1,\"maj\":25,\"sun\":25,\"net2brut\":0.7812,\"kmrate\":0.5}" | jq -r '.id')
+          curl -fsS -X POST $B/api/day -H "$J" -d "{\"child_id\":$CID,\"dates\":[\"2026-11-03\",\"2026-11-08\"],\"status\":\"P\"}"
+          curl -fsS "$B/api/month?child=$CID&ym=2026-11" | jq -e '.lines | length > 0'
+          curl -fsS -o recap.pdf  "$B/api/export/pdf?child=$CID&ym=2026-11"
+          curl -fsS -o recap.xlsx "$B/api/export/xlsx?child=$CID&ym=2026-11"
+          head -c 4 recap.pdf | grep -q '%PDF'
+          head -c 2 recap.xlsx | grep -q 'PK'
+          curl -fsS -o bulk.zip "$B/api/bulk?children=$CID&months=2026-11&fmt=pdf,xlsx"
+          unzip -tq bulk.zip
+
+      - name: Container logs
+        if: always()
+        run: docker logs nounoutil || true
+
+      - name: Upload sample exports
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-exports
+          path: |
+            recap.pdf
+            recap.xlsx
+
+  publish:
+    name: Publish to GHCR
+    needs: build-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
