@@ -11,7 +11,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
-[![CI](https://github.com/florent6901/nounoutil/actions/workflows/docker-image.yml/badge.svg)](https://github.com/florent6901/nounoutil/actions/workflows/docker-image.yml)
+[![CI](https://github.com/<votre-compte>/nounoutil/actions/workflows/docker-image.yml/badge.svg)](https://github.com/<votre-compte>/nounoutil/actions/workflows/docker-image.yml)
 ![License](https://img.shields.io/badge/licence-MIT-22c58b)
 
 [Fonctionnalités](#-fonctionnalités) · [Démarrage rapide](#-démarrage-rapide) · [Installer comme application](#-installer-comme-application-pwa) · [Règles de calcul](#-règles-de-calcul) · [Sécurité](#-sécurité)
@@ -28,6 +28,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 |---|---|
 | 📅 **Calendrier** | Enfant *présent / absent / malade*, nounou *en vacances / malade*, heures, repas, km, commentaire par jour |
 | ☑️ **Saisie rapide** | Sélection multiple de jours, raccourci « Lun-Ven » |
+| 🎉 **Jours fériés** | Jours fériés français ajoutés automatiquement (modifiables jour par jour), enfant présent ou absent, jours payés ou non, majoration réglable |
 | 🔒 **Cohérence** | Nounou absente : aucun état possible pour l'enfant ce jour-là |
 | 👨‍👩‍👧 **Multi-profils** | Plusieurs enfants, plusieurs nounous |
 | 🕓 **Historique des contrats** | Un changement de nounou ou de tarif à une date donnée ne modifie jamais les mois passés |
@@ -43,7 +44,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 ## 🚀 Démarrage rapide
 
 ```bash
-git clone https://github.com/florent6901/nounoutil.git
+git clone https://github.com/<votre-compte>/nounoutil.git
 cd nounoutil
 docker compose up -d --build
 ```
@@ -62,17 +63,6 @@ Les données sont stockées dans `./data/asmat.db` (volume Docker) et survivent 
 
 ```bash
 git pull && docker compose up -d --build
-```
-**Structure du fichier docker-compose.yml**:
-```yaml
-services:
-  nounoutil:
-    build: .
-    image: nounoutil:latest
-    container_name: nounoutil
-    ports: ["8080:8000"] # <= Modifier le port 8080 par un autre port
-    volumes: ["./data:/data"]
-    restart: unless-stopped
 ```
 
 ## 📲 Installer comme application (PWA)
@@ -145,6 +135,8 @@ Dans Chrome Android, ouvrir `chrome://flags/#unsafely-treat-insecure-origin-as-s
 | Heures complémentaires | au-delà du contrat, jusqu'à 45 h/semaine (mensualisé) |
 | Heures majorées | au-delà de 45 h/semaine, majoration paramétrable (25 % par défaut) |
 | Dimanche travaillé | heures du dimanche × taux horaire × majoration dimanche (0 % par défaut, à régler dans **Réglages → Rémunération**) |
+| Jour férié travaillé | heures × taux × majoration jour férié (0 % par défaut, **Réglages → Rémunération**). Dimanche et férié le même jour : la majoration la plus élevée s'applique |
+| Jour férié non travaillé | payé par défaut. Mensualisé : salaire maintenu, ou déduit si « non payé ». Heures réelles : payé seulement si « payé » (jours de semaine) |
 | Nounou malade | jours déduits par défaut (mensualisé), désactivable dans **Réglages → Rémunération** |
 | Enfant malade | déduit seulement si l'option « certificat médical » est activée |
 | Brut estimé | net ÷ coefficient (0,7812 par défaut, modifiable) |

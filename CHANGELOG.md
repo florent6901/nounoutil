@@ -1,6 +1,16 @@
 # Changelog
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.3.1] - 2026-11-12
+### Modifié
+- Les jours fériés français sont ajoutés automatiquement au calendrier (une fois par année, modifiables ensuite).
+- Le bouton « Jour férié » passe sous la section Nounou dans la fiche du jour ; la carte d'ajout manuel est retirée des Réglages.
+
+## [1.3.0] - 2026-11-12
+### Ajouté
+- Jours fériés : saisie par jour (🎉) ou ajout automatique des jours fériés français, enfant présent ou absent.
+- Réglages : jours fériés payés (oui par défaut) et majoration des jours fériés travaillés.
+
 ## [1.2.0] - 2026-11-12
 ### Ajouté
 - Majoration des dimanches travaillés (taux réglable dans Réglages → Rémunération).

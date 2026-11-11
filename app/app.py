@@ -3,14 +3,16 @@ from flask import Flask,request,jsonify,send_file,g
 app=Flask(__name__,static_folder='static',static_url_path='')
 DB=os.environ.get('DB','/data/asmat.db'); os.makedirs(os.path.dirname(DB),exist_ok=True)
 F=['name','nanny_id','hw','dw','weeks','rate','indem','meal','mode','dsick','maj','net2brut','kmrate','sex']
-CF=F[1:13]+['sun','dnm']
+CF=F[1:13]+['sun','dnm','hol_paid','hol']
 c=sqlite3.connect(DB)
 c.executescript("""create table if not exists nannies(id integer primary key,name text);
 create table if not exists children(id integer primary key,name,nanny_id,hw,dw,weeks,rate,indem,meal,mode,dsick,maj,net2brut);
 create table if not exists days(child_id,date,status,hours,meals,primary key(child_id,date));
 create table if not exists contracts(id integer primary key,child_id,start,nanny_id,hw,dw,weeks,rate,indem,meal,mode,dsick,maj,net2brut,kmrate);
+create table if not exists holidays(date primary key,name);
+create table if not exists hol_years(year primary key);
 create table if not exists ndays(nanny_id,date,status,primary key(nanny_id,date));""")
-for q in ['alter table children add column kmrate','alter table days add column km','alter table children add column sex','alter table days add column comment','alter table children add column sun','alter table children add column dnm','alter table contracts add column sun','alter table contracts add column dnm']:
+for q in ['alter table children add column kmrate','alter table days add column km','alter table children add column sex','alter table days add column comment','alter table children add column sun','alter table children add column dnm','alter table contracts add column sun','alter table contracts add column dnm','alter table children add column hol_paid','alter table children add column hol','alter table contracts add column hol_paid','alter table contracts add column hol']:
     try: c.execute(q)
     except Exception: pass
 if not c.execute('select 1 from contracts limit 1').fetchone():
@@ -81,13 +83,13 @@ def nday():
 def cts(i): return rows('select * from contracts where child_id=? order by start',i)
 def at(cs,d):
     x=[k for k in cs if k['start']<=d]; return x[-1] if x else cs[0]
-NUM=['P','A','S','NV','NM','norm','comp','maj','sunh','net','brut','ind','rep','km','kme']
-def calc(k,dl,n,d,nm):
-    hd=k['hw']/k['dw']; wk={}; P=S=A=meals=km=sunh=0
+NUM=['P','A','S','NV','NM','norm','comp','maj','sunh','holh','net','brut','ind','rep','km','kme']
+def calc(k,dl,n,d,nm,H=()):
+    hd=k['hw']/k['dw']; wk={}; P=S=A=meals=km=sunh=0; wd=lambda x:dt.date.fromisoformat(x).weekday()
     for r in d:
         km+=r.get('km') or 0
         if r['status']=='P':
-            P+=1; h=r['hours'] or hd; r['eh']=h; sunh+=h if dt.date.fromisoformat(r['date']).weekday()==6 else 0; w=dt.date.fromisoformat(r['date']).isocalendar()[1]; wk[w]=wk.get(w,0)+h; meals+=1 if r['meals'] is None else r['meals']
+            P+=1; h=r['hours'] or hd; r['eh']=h; sunh+=h if wd(r['date'])==6 else 0; w=dt.date.fromisoformat(r['date']).isocalendar()[1]; wk[w]=wk.get(w,0)+h; meals+=1 if r['meals'] is None else r['meals']
         elif r['status']=='S': S+=1
         elif r['status']=='A': A+=1
     comp=maj=norm=0; mens=k['mode']=='mensualise'
@@ -96,32 +98,62 @@ def calc(k,dl,n,d,nm):
         if mens: comp+=max(min(T,45)-k['hw'],0)
         else: norm+=T-mj
     NM=sum(nm.get(x)=='M' for x in dl); NV=sum(nm.get(x)=='V' for x in dl)
-    if mens: norm=max(k['hw']*k['weeks']/12*len(dl)/n-((NM if k.get('dnm') in (None,1) else 0)+(S if k['dsick'] else 0))*hd,0)+comp
-    net=norm*k['rate']+maj*k['rate']*(1+k['maj']/100)+sunh*k['rate']*(k.get('sun') or 0)/100
-    return dict(P=P,A=A,S=S,NV=NV,NM=NM,norm=norm,comp=comp,maj=maj,net=net,brut=net/k['net2brut'],ind=P*k['indem'],rep=meals*k['meal'],km=km,kme=km*(k['kmrate'] or 0),sunh=sunh)
+    hp=k.get('hol_paid')!=0; hm=k.get('hol') or 0; byd={r['date']:r for r in d}; holh=dedh=addh=0
+    for x in H:
+        r=byd.get(x)
+        if r and r['status']=='P':
+            if wd(x)==6:
+                if hm<=(k.get('sun') or 0): continue
+                sunh-=r['eh']
+            holh+=r['eh']
+        elif x not in nm and not(r and r['status']=='S' and k['dsick']) and wd(x)<5:
+            if mens and not hp: dedh+=hd
+            if not mens and hp: addh+=hd
+    if mens: norm=max(k['hw']*k['weeks']/12*len(dl)/n-((NM if k.get('dnm') in (None,1) else 0)+(S if k['dsick'] else 0))*hd-dedh,0)+comp
+    else: norm+=addh
+    net=norm*k['rate']+maj*k['rate']*(1+k['maj']/100)+sunh*k['rate']*(k.get('sun') or 0)/100+holh*k['rate']*hm/100
+    return dict(P=P,A=A,S=S,NV=NV,NM=NM,norm=norm,comp=comp,maj=maj,net=net,brut=net/k['net2brut'],ind=P*k['indem'],rep=meals*k['meal'],km=km,kme=km*(k['kmrate'] or 0),sunh=sunh,holh=holh)
+def easter(y):
+    a=y%19;b=y//100;c=y%100;d=b//4;e=b%4;f=(b+8)//25;g=(b-f+1)//3;h=(19*a+b-d-g+15)%30;i=c//4;k=c%4;l=(32+2*e+2*i-h-k)%7;m=(a+11*h+22*l)//451;mo,da=divmod(h+l-7*m+114,31)
+    return dt.date(y,mo,da+1)
+@app.post('/api/holiday')
+def holiday():
+    j=request.json
+    for d in j['dates']:
+        ex=rows('select name from holidays where date=?',d); run('delete from holidays where date=?',d)
+        if j['on']: run('insert into holidays values(?,?)',d,ex[0]['name'] if ex else 'Jour férié')
+    return {}
+def ensure_hol(y):
+    if rows('select 1 from hol_years where year=?',y): return
+    if not rows('select 1 from holidays where date like ?',f'{y}-%'):
+        e=easter(y); T=dt.timedelta
+        for d,n in [(dt.date(y,1,1),"Jour de l'an"),(e+T(1),'Lundi de Pâques'),(dt.date(y,5,1),'Fête du travail'),(dt.date(y,5,8),'Victoire 1945'),(e+T(39),'Ascension'),(e+T(50),'Lundi de Pentecôte'),(dt.date(y,7,14),'Fête nationale'),(dt.date(y,8,15),'Assomption'),(dt.date(y,11,1),'Toussaint'),(dt.date(y,11,11),'Armistice 1918'),(dt.date(y,12,25),'Noël')]:
+            run('insert or ignore into holidays values(?,?)',d.isoformat(),n)
+    run('insert into hol_years values(?)',y)
 def recap(c,ym):
-    y,m=map(int,ym.split('-')); n=calendar.monthrange(y,m)[1]; cs=cts(c['id']); d=rows('select * from days where child_id=? and date like ?',c['id'],ym+'%'); seg={}; nmall={}; sg=[]; T={q:0 for q in NUM}
+    y,m=map(int,ym.split('-')); ensure_hol(y); n=calendar.monthrange(y,m)[1]; cs=cts(c['id']); d=rows('select * from days where child_id=? and date like ?',c['id'],ym+'%'); seg={}; nmall={}; sg=[]; T={q:0 for q in NUM}; HOL={r['date'] for r in rows('select date from holidays where date like ?',ym+'%')}
     for i in range(1,n+1): x=f'{ym}-{i:02d}'; seg.setdefault(at(cs,x)['id'],[]).append(x)
     for k in cs:
         dl=seg.get(k['id'])
         if not dl: continue
         nm={r['date']:r['status'] for r in rows('select * from ndays where nanny_id=? and date like ?',k['nanny_id'],ym+'%') if r['date'] in dl}; nmall.update(nm)
-        o=calc(k,dl,n,[r for r in d if r['date'] in dl],nm)
+        o=calc(k,dl,n,[r for r in d if r['date'] in dl],nm,[x for x in dl if x in HOL])
         for q in NUM: T[q]+=o[q]
-        sg.append(dict(**{q:k[q] for q in ['nanny_id','hw','dw','weeks','rate','indem','meal','kmrate','mode','maj','sun']},nanny=(rows('select name from nannies where id=?',k['nanny_id']) or [{'name':'?'}])[0]['name'],frm=dl[0],to=dl[-1],total=round(o['net']+o['ind']+o['rep']+o['kme'],2)))
+        sg.append(dict(**{q:k[q] for q in ['nanny_id','hw','dw','weeks','rate','indem','meal','kmrate','mode','maj','sun','hol','hol_paid']},nanny=(rows('select name from nannies where id=?',k['nanny_id']) or [{'name':'?'}])[0]['name'],frm=dl[0],to=dl[-1],total=round(o['net']+o['ind']+o['rep']+o['kme'],2)))
     R=lambda v:round(v,2)
-    L=[('Jours de présence',T['P']),('Absences enfant',T['A']),('Enfant malade',T['S']),('Nounou en vacances',T['NV']),('Nounou malade',T['NM']),('Heures normales',R(T['norm'])),('Heures complémentaires incluses',R(T['comp'])),('Heures majorées',R(T['maj'])),('Heures dimanche majorées',R(T['sunh'])),('Salaire net (€)',R(T['net'])),('Salaire brut estimé (€)',R(T['brut'])),("Indemnités d'entretien (€)",R(T['ind'])),('Repas (€)',R(T['rep'])),('Km parcourus',round(T['km'],1)),('Indemnités km (€)',R(T['kme'])),('TOTAL à verser (€)',R(T['net']+T['ind']+T['rep']+T['kme']))]
+    L=[('Jours de présence',T['P']),('Absences enfant',T['A']),('Enfant malade',T['S']),('Nounou en vacances',T['NV']),('Nounou malade',T['NM']),('Heures normales',R(T['norm'])),('Heures complémentaires incluses',R(T['comp'])),('Heures majorées',R(T['maj'])),('Heures dimanche majorées',R(T['sunh'])),('Heures jours fériés majorées',R(T['holh'])),('Salaire net (€)',R(T['net'])),('Salaire brut estimé (€)',R(T['brut'])),("Indemnités d'entretien (€)",R(T['ind'])),('Repas (€)',R(T['rep'])),('Km parcourus',round(T['km'],1)),('Indemnités km (€)',R(T['kme'])),('TOTAL à verser (€)',R(T['net']+T['ind']+T['rep']+T['kme']))]
     return L,d,sg,nmall
 @app.get('/api/month')
 def month():
     c=rows('select * from children where id=?',request.args['child'])[0]; L,d,sg,nm=recap(c,request.args['ym'])
-    return jsonify(days={r['date']:r for r in d},ndays=nm,lines=L,segs=sg)
+    return jsonify(days={r['date']:r for r in d},ndays=nm,lines=L,segs=sg,hol={r['date']:r['name'] for r in rows('select * from holidays where date like ?',request.args['ym']+'%')})
 def fm(k,v):
     if '(€)' in k: return k.replace(' (€)',''),f"{v:.2f}".replace('.',',')+' €'
     return k,str(v).replace('.',',')
 MN=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 SL={'P':'Présent','A':'Absent','S':'Malade'}; NL={'V':'Nounou en vacances','M':'Nounou malade'}
 def pdf(c,nn,ym,L,d,nd,b,sg):
+    hd_=c.get('hd_',{})
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import mm
@@ -132,26 +164,26 @@ def pdf(c,nn,ym,L,d,nd,b,sg):
     sm=PS('sm',fontName='Helvetica',fontSize=8.5,leading=10); hd=c['hw']/c['dw']
     ban=Table([[[Paragraph(c['name'],t),Paragraph(f'Récapitulatif mensuel — {MN[m-1]} {y}',st)]]],colWidths=[W]); ban.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),PR),('LEFTPADDING',(0,0),(-1,-1),14),('TOPPADDING',(0,0),(-1,-1),12),('BOTTOMPADDING',(0,0),(-1,-1),12)]))
     eu=lambda v:f'{v:.2f}'.replace('.',',')+' €'; md='mensualisé' if c['mode']=='mensualise' else 'heures réelles'
-    inf=Table([['Nounou',nn,'Taux horaire net',eu(c['rate'])+' / h'],['Contrat',f"{c['hw']:g} h/sem sur {c['dw']:g} j · {c['weeks']:g} sem/an","Indemnité d'entretien",eu(c['indem'])+' / jour'],['Mode',md,'Repas · Km',f"{eu(c['meal'])} · {eu(c['kmrate'] or 0)}/km"],['Majorations',f"Dimanche {c.get('sun') or 0:g} %",'Au-delà de 45 h',f"{c['maj']:g} %"]],colWidths=[22*mm,64*mm,40*mm,52*mm])
+    inf=Table([['Nounou',nn,'Taux horaire net',eu(c['rate'])+' / h'],['Contrat',f"{c['hw']:g} h/sem sur {c['dw']:g} j · {c['weeks']:g} sem/an","Indemnité d'entretien",eu(c['indem'])+' / jour'],['Mode',md,'Repas · Km',f"{eu(c['meal'])} · {eu(c['kmrate'] or 0)}/km"],['Majorations',f"Dimanche {c.get('sun') or 0:g} %",'Au-delà de 45 h',f"{c['maj']:g} %"],['Jours fériés','non payés' if c.get('hol_paid')==0 else 'payés','Majoration férié',f"{c.get('hol') or 0:g} %"]],colWidths=[22*mm,64*mm,40*mm,52*mm])
     inf.setStyle(TableStyle([('FONT',(0,0),(-1,-1),'Helvetica',9),('FONT',(0,0),(0,-1),'Helvetica-Bold',9),('FONT',(2,0),(2,-1),'Helvetica-Bold',9),('TEXTCOLOR',(0,0),(0,-1),PR),('TEXTCOLOR',(2,0),(2,-1),PR),('BACKGROUND',(0,0),(-1,-1),H('#f3f5fb')),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
     sgt=None
     if len(sg)>1:
         sgt=Table([['Période','Nounou','Taux net','Entretien/j','H/sem','Total']]+[[f"{x['frm'][8:]}/{m:02d} → {x['to'][8:]}/{m:02d}",x['nanny'],eu(x['rate']),eu(x['indem']),f"{x['hw']:g}",eu(x['total'])] for x in sg],colWidths=[40*mm,36*mm,24*mm,28*mm,18*mm,32*mm])
         sgt.setStyle(TableStyle([('FONT',(0,0),(-1,-1),'Helvetica',8.5),('FONT',(0,0),(-1,0),'Helvetica-Bold',8.5),('BACKGROUND',(0,0),(-1,0),H('#e9ecff')),('TEXTCOLOR',(0,0),(-1,0),PR),('LINEBELOW',(0,0),(-1,-1),.3,H('#d5d9ea')),('ALIGN',(2,0),(-1,-1),'RIGHT')]))
     rows_=[];sty=[('FONT',(0,0),(-1,-1),'Helvetica',10),('ALIGN',(1,0),(1,-1),'RIGHT'),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),('LINEBELOW',(0,0),(-1,-1),.4,H('#e8ebf5'))]
-    for h,idx in [('PRÉSENCES',range(0,5)),('HEURES & SALAIRE (Pajemploi)',range(5,11)),('INDEMNITÉS',range(11,15))]:
+    for h,idx in [('PRÉSENCES',range(0,5)),('HEURES & SALAIRE (Pajemploi)',range(5,12)),('INDEMNITÉS',range(12,16))]:
         sty+=[('SPAN',(0,len(rows_)),(1,len(rows_))),('BACKGROUND',(0,len(rows_)),(1,len(rows_)),H('#e9ecff')),('FONT',(0,len(rows_)),(0,len(rows_)),'Helvetica-Bold',8.5),('TEXTCOLOR',(0,len(rows_)),(0,len(rows_)),PR)]
         rows_.append([h,'']); rows_+=[list(fm(*L[i])) for i in idx]
-    rows_.append(list(fm(*L[15]))); k=len(rows_)-1
+    rows_.append(list(fm(*L[16]))); k=len(rows_)-1
     sty+=[('BACKGROUND',(0,k),(1,k),PR),('TEXTCOLOR',(0,k),(1,k),colors.white),('FONT',(0,k),(1,k),'Helvetica-Bold',12)]
     rec=Table(rows_,colWidths=[W-50*mm,50*mm]); rec.setStyle(TableStyle(sty))
     nm={r['date']:r['status'] for r in nd}; dm={r['date']:r for r in d}
-    dates=sorted({x for x,r in dm.items() if r['status'] or r.get('km') or r.get('comment')}|set(nm))
+    dates=sorted({x for x,r in dm.items() if r['status'] or r.get('km') or r.get('comment')}|set(nm)|set(hd_))
     data=[['Date','Enfant','Nounou','Heures','Repas','Km','Commentaire']];cs=[]
     for i,x in enumerate(dates,1):
         r=dm.get(x,{}); dd=__import__('datetime').date.fromisoformat(x); p=r.get('status')=='P'
-        data.append([f"{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][dd.weekday()]} {dd.day:02d}/{dd.month:02d}",SL.get(r.get('status'),''),NL.get(nm.get(x),''),f"{(r.get('eh') or r.get('hours') or hd):g}" if p else '',(1 if r.get('meals') is None else r['meals']) if p else '',f"{r['km']:g}" if r.get('km') else '',Paragraph((r.get('comment') or '').replace('<','&lt;'),sm)])
-        col=H({'V':'#dff3fd','M':'#f8e1fb'}[nm[x]]) if x in nm else H({'P':'#dcf7ec','A':'#fff1d6','S':'#ffe0e3'}.get(r.get('status'),'#ffffff'))
+        data.append([f"{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][dd.weekday()]} {dd.day:02d}/{dd.month:02d}",SL.get(r.get('status'),''),NL.get(nm.get(x),''),f"{(r.get('eh') or r.get('hours') or hd):g}" if p else '',(1 if r.get('meals') is None else r['meals']) if p else '',f"{r['km']:g}" if r.get('km') else '',Paragraph((f'<b>Férié : {hd_[x]}</b> ' if x in hd_ else '')+(r.get('comment') or '').replace('<','&lt;'),sm)])
+        col=H({'V':'#dff3fd','M':'#f8e1fb'}[nm[x]]) if x in nm else H({'P':'#dcf7ec','A':'#fff1d6','S':'#ffe0e3'}.get(r.get('status'),'#fff4d6' if x in hd_ else '#ffffff'))
         cs.append(('BACKGROUND',(0,i),(-1,i),col))
     det=Table(data,colWidths=[24*mm,20*mm,34*mm,15*mm,14*mm,12*mm,59*mm],repeatRows=1)
     det.setStyle(TableStyle([('FONT',(0,0),(-1,-1),'Helvetica',8.5),('FONT',(0,0),(-1,0),'Helvetica-Bold',8.5),('BACKGROUND',(0,0),(-1,0),PR),('TEXTCOLOR',(0,0),(-1,0),colors.white),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LINEBELOW',(0,0),(-1,-1),.3,H('#d5d9ea')),('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]+cs))
@@ -161,7 +193,7 @@ def pdf(c,nn,ym,L,d,nd,b,sg):
     SimpleDocTemplate(b,pagesize=A4,leftMargin=16*mm,rightMargin=16*mm,topMargin=14*mm,bottomMargin=16*mm).build([ban,Spacer(1,8),inf]+([Paragraph('Contrats sur la période',h2),sgt] if sgt else [])+[Paragraph('Récapitulatif',h2),rec,Paragraph('Détail des jours',h2),det if dates else Paragraph('Aucun événement ce mois-ci.',sm)],onFirstPage=ft,onLaterPages=ft)
 def build(c,ym,fmt):
     L,d,sg,nm=recap(c,ym); nd=[{'date':k,'status':v} for k,v in nm.items()]; b=io.BytesIO()
-    nn=' → '.join(dict.fromkeys(x['nanny'] for x in sg)); c={**c,**sg[-1]}
+    nn=' → '.join(dict.fromkeys(x['nanny'] for x in sg)); c={**c,**sg[-1]}; hd_={r['date']:r['name'].replace('<','') for r in rows('select * from holidays where date like ?',ym+'%')}; c['hd_']=hd_
     if fmt=='xlsx':
         from openpyxl import Workbook
         from openpyxl.styles import PatternFill,Font,Alignment,Border,Side
@@ -170,29 +202,29 @@ def build(c,ym,fmt):
             w.merge_cells(rng); x=w[rng.split(':')[0]]; x.value=txt; x.font=Font(size=15,bold=True,color='FFFFFF'); x.fill=fl('5B6CFF'); x.alignment=Alignment(vertical='center',indent=1); w.row_dimensions[1].height=h
         wb=Workbook(); ws=wb.active; ws.title='Récap'; ws.sheet_view.showGridLines=False; ws.column_dimensions['A'].width=40; ws.column_dimensions['B'].width=36
         ban(ws,'A1:B1',f'Récapitulatif mensuel — {MN[m-1]} {y}')
-        info=[('Enfant',c['name']),('Assistante maternelle',nn),('Taux horaire net',c['rate']),("Indemnité d'entretien / jour",c['indem']),('Contrat',f"{c['hw']:g} h/sem sur {c['dw']:g} j · {c['weeks']:g} sem/an"),('Mode','Mensualisé' if c['mode']=='mensualise' else 'Heures réelles'),('Majorations',f"Dimanche {c.get('sun') or 0:g} % · > 45 h {c['maj']:g} %")]+([('Contrats',f'{len(sg)} sur ce mois (voir PDF)')] if len(sg)>1 else [])
+        info=[('Enfant',c['name']),('Assistante maternelle',nn),('Taux horaire net',c['rate']),("Indemnité d'entretien / jour",c['indem']),('Contrat',f"{c['hw']:g} h/sem sur {c['dw']:g} j · {c['weeks']:g} sem/an"),('Mode','Mensualisé' if c['mode']=='mensualise' else 'Heures réelles'),('Majorations',f"Dimanche {c.get('sun') or 0:g} % · > 45 h {c['maj']:g} %"),('Jours fériés',('non payés' if c.get('hol_paid')==0 else 'payés')+f" · majoration {c.get('hol') or 0:g} %")]+([('Contrats',f'{len(sg)} sur ce mois (voir PDF)')] if len(sg)>1 else [])
         for i,(k,v) in enumerate(info,2):
             ws.cell(i,1,k).font=Font(bold=True,color='5B6CFF'); x=ws.cell(i,2,v); x.alignment=Alignment(horizontal='right')
             if isinstance(v,float) or isinstance(v,int): x.number_format=EUR
             for q in (1,2): ws.cell(i,q).fill=fl('F3F5FB')
         r=len(info)+3
-        for h,idx in [('PRÉSENCES',range(0,5)),('HEURES & SALAIRE (Pajemploi)',range(5,11)),('INDEMNITÉS',range(11,15))]:
+        for h,idx in [('PRÉSENCES',range(0,5)),('HEURES & SALAIRE (Pajemploi)',range(5,12)),('INDEMNITÉS',range(12,16))]:
             ws.merge_cells(start_row=r,start_column=1,end_row=r,end_column=2); ws.cell(r,1,h).font=Font(bold=True,size=9,color='5B6CFF'); ws.cell(r,1).fill=fl('E9ECFF'); r+=1
             for i in idx:
                 k,v=L[i]; ws.cell(r,1,k.replace(' (€)','')); x=ws.cell(r,2,v); x.alignment=Alignment(horizontal='right')
                 if '(€)' in k: x.number_format=EUR
                 for q in (1,2): ws.cell(r,q).border=bd
                 r+=1
-        ws.cell(r,1,'TOTAL à verser'); ws.cell(r,2,L[15][1]).number_format=EUR
+        ws.cell(r,1,'TOTAL à verser'); ws.cell(r,2,L[16][1]).number_format=EUR
         for q in (1,2): x=ws.cell(r,q); x.font=Font(bold=True,size=13,color='FFFFFF'); x.fill=fl('5B6CFF'); x.alignment=Alignment(horizontal='left' if q==1 else 'right',vertical='center')
         ws.row_dimensions[r].height=26
         w2=wb.create_sheet('Jours'); w2.sheet_view.showGridLines=False; ban(w2,'A1:G1',f"{c['name']} · {nn} — {MN[m-1]} {y}")
         for j,(hn,wd) in enumerate(zip(['Date','Enfant','Nounou','Heures','Repas','Km','Commentaire'],[14,12,22,9,9,9,50]),1):
             x=w2.cell(3,j,hn); x.font=Font(bold=True,color='FFFFFF'); x.fill=fl('5B6CFF'); x.alignment=Alignment(horizontal='center'); w2.column_dimensions[chr(64+j)].width=wd
         nm={r['date']:r['status'] for r in nd}; dm={r['date']:r for r in d}; row=4
-        for x in sorted({k for k,r in dm.items() if r['status'] or r.get('km') or r.get('comment')}|set(nm)):
-            r_=dm.get(x,{}); dd=dt.date.fromisoformat(x); col={'V':'DFF3FD','M':'F8E1FB'}[nm[x]] if x in nm else {'P':'DCF7EC','A':'FFF1D6','S':'FFE0E3'}.get(r_.get('status'),'FFFFFF')
-            for j,v in enumerate([f"{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][dd.weekday()]} {dd.day:02d}/{dd.month:02d}",SL.get(r_.get('status'),''),NL.get(nm.get(x),''),r_.get('hours'),r_.get('meals'),r_.get('km'),r_.get('comment')],1):
+        for x in sorted({k for k,r in dm.items() if r['status'] or r.get('km') or r.get('comment')}|set(nm)|set(hd_)):
+            r_=dm.get(x,{}); dd=dt.date.fromisoformat(x); col={'V':'DFF3FD','M':'F8E1FB'}[nm[x]] if x in nm else {'P':'DCF7EC','A':'FFF1D6','S':'FFE0E3'}.get(r_.get('status'),'FFF4D6' if x in hd_ else 'FFFFFF')
+            for j,v in enumerate([f"{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][dd.weekday()]} {dd.day:02d}/{dd.month:02d}",SL.get(r_.get('status'),''),NL.get(nm.get(x),''),r_.get('hours'),r_.get('meals'),r_.get('km'),(f'Férié : {hd_[x]}. ' if x in hd_ else '')+(r_.get('comment') or '')],1):
                 z=w2.cell(row,j,v); z.fill=fl(col); z.border=bd; z.alignment=Alignment(wrap_text=j==7,vertical='center',horizontal='left' if j in(1,2,3,7) else 'center')
             row+=1
         w2.freeze_panes='A4'; ws.page_setup.fitToWidth=1; wb.save(b); mt='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
