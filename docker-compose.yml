@@ -1,0 +1,8 @@
+services:
+  nounoutil:
+    build: .
+    image: nounoutil:latest
+    container_name: nounoutil
+    ports: ["8080:8000"]
+    volumes: ["./data:/data"]
+    restart: unless-stopped
