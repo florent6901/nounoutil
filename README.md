@@ -171,15 +171,6 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cd app && DB=../data/asmat.db flask --app app run --debug
 ```
-
-## 🔌 API (résumé)
-
-`GET /api/state` · `GET /api/month?child=&ym=` · `POST /api/day` · `POST /api/nday` · `POST /api/child` · `GET /api/export/{pdf|xlsx}?child=&ym=` · `GET /api/bulk?children=&months=&fmt=`
-
-## 🤝 Contribuer
-
-Branches `feat/…`, `fix/…`, `docs/…` · messages de commit [Conventional Commits](https://www.conventionalcommits.org/fr/) (`feat: …`, `fix: …`) · versions `vMAJEUR.MINEUR.CORRECTIF`.
-
 ## 📄 Licence
 
 [MIT](LICENSE)
