@@ -42,7 +42,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 ## 🚀 Démarrage rapide
 
 ```bash
-git clone https://github.com/<votre-compte>/nounoutil.git
+git clone https://github.com/florent6901/nounoutil.git
 cd nounoutil
 docker compose up -d --build
 ```
@@ -61,6 +61,17 @@ Les données sont stockées dans `./data/asmat.db` (volume Docker) et survivent 
 
 ```bash
 git pull && docker compose up -d --build
+```
+**Structure du fichier docker-compose.yml**:
+```yaml
+services:
+  nounoutil:
+    build: .
+    image: nounoutil:latest
+    container_name: nounoutil
+    ports: ["8080:8000"] # <= Modifier le port 8080 par un autre port
+    volumes: ["./data:/data"]
+    restart: unless-stopped
 ```
 
 ## 📲 Installer comme application (PWA)
