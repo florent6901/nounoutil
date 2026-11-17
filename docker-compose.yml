@@ -3,6 +3,15 @@ services:
     build: .
     image: nounoutil:latest
     container_name: nounoutil
-    ports: ["8080:8000"]
-    volumes: ["./data:/data"]
+    ports: ["8080:8000"]          # http(s)://<ip-du-serveur>:8080
+    volumes:
+      - ./data:/data              # base de données + certificats générés (data/certs)
+      # - ./certs:/certs:ro       # dossier de certificats personnels (mode custom)
+    environment:
+      TZ: Europe/Paris
+      HTTPS: "false"              # "true" pour activer HTTPS
+      TLS_MODE: selfsigned        # selfsigned = certificat créé automatiquement | custom = certificat personnel
+      TLS_DOMAIN: "localhost"     # selfsigned : noms et/ou IP du certificat, séparés par des virgules (ex. "192.168.1.82,nounoutil.local")
+      # TLS_CERT: /certs/fullchain.pem   # custom : chemin du certificat (défaut : /data/certs/cert.pem)
+      # TLS_KEY: /certs/privkey.pem      # custom : chemin de la clé privée (défaut : /data/certs/key.pem)
     restart: unless-stopped

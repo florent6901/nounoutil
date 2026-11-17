@@ -1,6 +1,12 @@
 # Changelog
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.0] - 2026-11-17
+### Ajouté
+- Date du jour entourée en vert dans le calendrier ; un toucher sur le titre du mois ramène à aujourd'hui.
+- HTTPS natif configurable dans `docker-compose.yml` (`HTTPS`, `TLS_MODE`, `TLS_DOMAIN`, `TLS_CERT`, `TLS_KEY`) : certificat auto-signé généré automatiquement ou certificat personnel.
+- Téléchargement du certificat auto-signé sur `/certificat`.
+
 ## [1.3.1] - 2026-11-12
 ### Modifié
 - Les jours fériés français sont ajoutés automatiquement au calendrier (une fois par année, modifiables ensuite).

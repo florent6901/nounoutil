@@ -249,5 +249,10 @@ def bulk():
             for ym in ms:
                 for f in fs: zf.writestr(f'{n}/{ym}-{n}.{f}',build(c,ym,f)[0].getvalue())
     z.seek(0); return send_file(z,mimetype='application/zip',as_attachment=True,download_name='exports-asmat.zip')
+@app.get('/certificat')
+def certificat():
+    f=os.environ.get('TLS_CERT','/data/certs/cert.pem')
+    if os.environ.get('HTTPS')=='true' and os.environ.get('TLS_MODE','selfsigned')=='selfsigned' and os.path.exists(f): return send_file(f,mimetype='application/x-x509-ca-cert',as_attachment=True,download_name='nounoutil.crt')
+    return {'error':'Certificat auto-signé indisponible'},404
 @app.get('/')
 def idx(): return app.send_static_file('index.html')
