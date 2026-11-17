@@ -11,7 +11,6 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
-[![CI](https://github.com/<votre-compte>/nounoutil/actions/workflows/docker-image.yml/badge.svg)](https://github.com/<votre-compte>/nounoutil/actions/workflows/docker-image.yml)
 ![License](https://img.shields.io/badge/licence-MIT-22c58b)
 
 [Fonctionnalités](#-fonctionnalités) · [Démarrage rapide](#-démarrage-rapide) · [Installer comme application](#-installer-comme-application-pwa) · [Règles de calcul](#-règles-de-calcul) · [Sécurité](#-sécurité)
@@ -45,7 +44,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 ## 🚀 Démarrage rapide
 
 ```bash
-git clone https://github.com/<votre-compte>/nounoutil.git
+git clone https://github.com/florent6901/nounoutil.git
 cd nounoutil
 docker compose up -d --build
 ```
