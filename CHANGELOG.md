@@ -1,6 +1,13 @@
 # Changelog
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.5.0] - 2026-11-19
+### Ajouté
+- CP non rémunéré de la nounou : jour hachuré dans le calendrier, déduit du salaire (mensualisé) et compté dans le récap, le PDF et l'Excel.
+- Option d'affichage « Hachurer les week-ends » (activée par défaut, hachures grises).
+### Modifié
+- Le bouton « Nounou présente » est remplacé par « CP non rémunéré » ; un absence se retire en retouchant son bouton.
+
 ## [1.4.0] - 2026-11-17
 ### Ajouté
 - Date du jour entourée en vert dans le calendrier ; un toucher sur le titre du mois ramène à aujourd'hui.

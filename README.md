@@ -11,6 +11,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
+[![CI](https://github.com/<votre-compte>/nounoutil/actions/workflows/docker-image.yml/badge.svg)](https://github.com/<votre-compte>/nounoutil/actions/workflows/docker-image.yml)
 ![License](https://img.shields.io/badge/licence-MIT-22c58b)
 
 [Fonctionnalités](#-fonctionnalités) · [Démarrage rapide](#-démarrage-rapide) · [Installer comme application](#-installer-comme-application-pwa) · [Règles de calcul](#-règles-de-calcul) · [Sécurité](#-sécurité)
@@ -25,7 +26,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 
 | | |
 |---|---|
-| 📅 **Calendrier** | Enfant *présent / absent / malade*, nounou *en vacances / malade*, heures, repas, km, commentaire par jour |
+| 📅 **Calendrier** | Enfant *présent / absent / malade*, nounou *en vacances / malade / CP non rémunéré*, heures, repas, km, commentaire par jour |
 | ☑️ **Saisie rapide** | Sélection multiple de jours, raccourci « Lun-Ven » |
 | 🎉 **Jours fériés** | Jours fériés français ajoutés automatiquement (modifiables jour par jour), enfant présent ou absent, jours payés ou non, majoration réglable |
 | 🔒 **Cohérence** | Nounou absente : aucun état possible pour l'enfant ce jour-là |
@@ -34,7 +35,7 @@ Exports PDF et Excel pour faciliter la déclaration **Pajemploi**.
 | 📊 **Récap mensuel** | Heures normales / complémentaires / majorées, dimanches, salaire net et brut estimé, indemnités |
 | 📄 **Exports** | PDF et Excel au mois, ou en lot (ZIP par enfant, mois et année) |
 | 🎨 **Thèmes** | Clair, bleu marine, sombre |
-| 📍 **Repères** | Date du jour entourée en vert, retour au mois courant d'un toucher sur le titre |
+| 📍 **Repères** | Date du jour entourée en vert, week-ends hachurés en gris (option), retour au mois courant d'un toucher sur le titre |
 | 📱 **Mobile d'abord** | Responsive, installable comme une application |
 
 <div align="center">
@@ -163,6 +164,7 @@ Dans Chrome Android, ouvrir `chrome://flags/#unsafely-treat-insecure-origin-as-s
 | Jour férié travaillé | heures × taux × majoration jour férié (0 % par défaut, **Réglages → Rémunération**). Dimanche et férié le même jour : la majoration la plus élevée s'applique |
 | Jour férié non travaillé | payé par défaut. Mensualisé : salaire maintenu, ou déduit si « non payé ». Heures réelles : payé seulement si « payé » (jours de semaine) |
 | Nounou malade | jours déduits par défaut (mensualisé), désactivable dans **Réglages → Rémunération** |
+| Nounou en CP non rémunéré | jour déduit (heures d'une journée × taux) en mensualisé, comptabilisé dans le récap |
 | Enfant malade | déduit seulement si l'option « certificat médical » est activée |
 | Brut estimé | net ÷ coefficient (0,7812 par défaut, modifiable) |
 | Indemnités | entretien × jours de présence, repas × nombre de repas, km × taux/km |
